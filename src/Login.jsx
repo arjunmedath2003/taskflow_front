@@ -133,7 +133,7 @@ const AuthPage = ({ onAuthSuccess }) => {
     const [touched, setTouched] = useState({});
     const [isLoading, setIsLoading] = useState(false);
 
-    const API_URL = 'http://localhost:5000'; // Your backend URL
+    const API_URL = 'https://taskflowback.netlify.app/.netlify/functions/api/'; // Your backend URL
 
     const validate = (currentValues) => {
         const newErrors = {};

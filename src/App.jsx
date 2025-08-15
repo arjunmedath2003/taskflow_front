@@ -5,7 +5,7 @@ import taskflowLogo from './assets/taskflow.svg';
 import "./App.css";
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://taskflowback.netlify.app/.netlify/functions/api/';
 
 // Reusable Modal Component
 const Modal = ({ children, isOpen, onClose }) => {
@@ -100,14 +100,21 @@ export default function App() {
       setUser(JSON.parse(storedUser));
       const fetchData = async () => {
         setIsLoading(true);
-        const fetchedLists = await apiFetch('/api/lists');
-        const fetchedTasks = await apiFetch('/api/tasks');
-        
-        // Map MongoDB's _id to id for frontend compatibility
-        if (fetchedLists) setLists(fetchedLists.map(l => ({...l, id: l._id})));
-        if (fetchedTasks) setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
-        
-        setIsLoading(false);
+        try {
+            const [fetchedLists, fetchedTasks] = await Promise.all([
+                apiFetch('/api/lists'),
+                apiFetch('/api/tasks')
+            ]);
+            
+            // Map MongoDB's _id to id for frontend compatibility
+            if (fetchedLists) setLists(fetchedLists.map(l => ({...l, id: l._id})));
+            if (fetchedTasks) setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
+        } catch (error) {
+            console.error("Failed to fetch initial data:", error);
+            // Handle potential auth errors during initial fetch
+        } finally {
+            setIsLoading(false);
+        }
       };
       fetchData();
     } else {
@@ -156,80 +163,70 @@ export default function App() {
   // --- CRUD Handlers ---
 
   const handleAddTask = async (taskData) => {
-    const response = await apiFetch('/api/tasks', {
+    await apiFetch('/api/tasks', {
         method: 'POST',
         body: JSON.stringify(taskData),
     });
-    // If the task was created successfully, refetch all tasks to update the UI
-    if (response) {
-        const fetchedTasks = await apiFetch('/api/tasks');
-        if (fetchedTasks) {
-            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
-        }
-        setIsAddTaskModalOpen(false);
+    // If we get here, the POST was successful. Now refetch.
+    const fetchedTasks = await apiFetch('/api/tasks');
+    if (fetchedTasks) {
+        setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
     }
   };
   
   const handleToggleTask = async (taskId) => {
     const taskToUpdate = tasks.find(task => task.id === taskId);
     if (!taskToUpdate) return;
-
-    const response = await apiFetch(`/api/tasks/${taskId}`, {
+  
+    await apiFetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         body: JSON.stringify({ ...taskToUpdate, isCompleted: !taskToUpdate.isCompleted }),
     });
 
-    // If the task was updated successfully, refetch all tasks
-    if (response) {
-        const fetchedTasks = await apiFetch('/api/tasks');
-        if (fetchedTasks) {
-            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
-        }
+    // To provide instant feedback, we can update state locally first,
+    // then refetch or update based on response. For simplicity, refetching is used.
+    const fetchedTasks = await apiFetch('/api/tasks');
+    if (fetchedTasks) {
+        setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
     }
   };
 
   const handleDeleteTask = async (taskId) => {
     await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    // Optimistic UI update can be done here, but refetching ensures consistency.
     setTasks(tasks.filter(task => task.id !== taskId));
-    setTaskToDelete(null);
   };
 
   const handleUpdateTask = async (updatedTaskData) => {
-    const response = await apiFetch(`/api/tasks/${updatedTaskData.id}`, {
+    await apiFetch(`/api/tasks/${updatedTaskData.id}`, {
         method: 'PUT',
         body: JSON.stringify(updatedTaskData),
     });
-    // If the task was updated successfully, refetch all tasks
-    if (response) {
-        const fetchedTasks = await apiFetch('/api/tasks');
-        if (fetchedTasks) {
-            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
-        }
-        setTaskToEdit(null);
+    // Refetch to get the latest state
+    const fetchedTasks = await apiFetch('/api/tasks');
+    if (fetchedTasks) {
+        setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
     }
   };
 
   const handleAddList = async (listName) => {
-    const response = await apiFetch('/api/lists', {
+    await apiFetch('/api/lists', {
         method: 'POST',
         body: JSON.stringify({ name: listName }),
     });
-    // If the list was created successfully, refetch all lists to update the UI
-    if (response) {
-        const fetchedLists = await apiFetch('/api/lists');
-        if (fetchedLists) {
-            setLists(fetchedLists.map(l => ({...l, id: l._id})));
-        }
-        setIsAddListModalOpen(false);
+    // Refetch lists
+    const fetchedLists = await apiFetch('/api/lists');
+    if (fetchedLists) {
+        setLists(fetchedLists.map(l => ({...l, id: l._id})));
     }
   };
 
   const handleDeleteCategory = async (listId) => {
     await apiFetch(`/api/lists/${listId}`, { method: 'DELETE' });
+    // Update both lists and tasks state
     setLists(lists.filter(list => list.id !== listId));
     setTasks(prevTasks => prevTasks.filter(task => task.listId !== listId));
     if (selectedListId === listId) setSelectedListId('all');
-    setCategoryToDelete(null);
   };
 
   const handleChangePassword = async (passwords) => {
@@ -603,10 +600,28 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState('Medium');
     const [dueDate, setDueDate] = useState('');
-    const [listId, setListId] = useState(lists[0]?.id || '');
+    const [listId, setListId] = useState('');
     const [errors, setErrors] = useState({});
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [apiError, setApiError] = useState(null);
+    const [success, setSuccess] = useState(false);
 
-    useEffect(() => { if (lists.length > 0 && !listId) setListId(lists[0].id); }, [lists, listId]);
+    useEffect(() => {
+        if (!isOpen) {
+            setTimeout(() => {
+                setTitle('');
+                setPriority('Medium');
+                setDueDate('');
+                setListId(lists[0]?.id || '');
+                setErrors({});
+                setIsProcessing(false);
+                setApiError(null);
+                setSuccess(false);
+            }, 300);
+        } else {
+            if (lists.length > 0 && !listId) setListId(lists[0].id);
+        }
+    }, [isOpen, lists, listId]);
 
     const getTomorrowDate = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; }
 
@@ -618,14 +633,23 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
         return newErrors;
     }
 
-    const handleAdd = () => {
+    const handleAdd = async () => {
         const newErrors = validate();
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
         }
-        onAdd({ title, priority, dueDate, listId });
-        setTitle(''); setPriority('Medium'); setDueDate(''); setErrors({});
+        setIsProcessing(true);
+        setApiError(null);
+        setSuccess(false);
+        try {
+            await onAdd({ title, priority, dueDate, listId });
+            setSuccess(true);
+            setTimeout(onClose, 2000);
+        } catch (err) {
+            setApiError('Failed to add task. Please try again.');
+            setIsProcessing(false);
+        }
     };
   
     return (
@@ -634,36 +658,52 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
           <h3 className="text-lg font-bold text-white">Add New Task</h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-700"><X size={20} /></button>
         </div>
-        <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
-                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-                {errors.title && <p className="text-xs mt-1 text-red-500">{errors.title}</p>}
+        {success && (
+            <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 rounded-md" role="alert">
+                <strong className="font-bold">Success!</strong>
+                <span className="block sm:inline"> Task added. This window will close shortly.</span>
             </div>
-            <div>
-                <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
-                <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                    {lists.length > 0 ? lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>) : <option disabled>Create a category first</option>}
-                </select>
-                {errors.listId && <p className="text-xs mt-1 text-red-500">{errors.listId}</p>}
+        )}
+        {apiError && (
+            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4" role="alert">
+                <strong className="font-bold">Error:</strong>
+                <span className="block sm:inline"> {apiError}</span>
             </div>
-            <div className="flex gap-4">
-                <div className="flex-1">
-                    <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
-                    <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getTomorrowDate()} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-                    {errors.dueDate && <p className="text-xs mt-1 text-red-500">{errors.dueDate}</p>}
+        )}
+        {!success && (
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
+                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                    {errors.title && <p className="text-xs mt-1 text-red-500">{errors.title}</p>}
                 </div>
-                <div className="flex-1">
-                    <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                        <option>Low</option><option>Medium</option><option>High</option>
+                <div>
+                    <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
+                    <select value={listId} onChange={(e) => setListId(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+                        {lists.length > 0 ? lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>) : <option disabled>Create a category first</option>}
                     </select>
+                    {errors.listId && <p className="text-xs mt-1 text-red-500">{errors.listId}</p>}
+                </div>
+                <div className="flex gap-4">
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
+                        <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getTomorrowDate()} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                        {errors.dueDate && <p className="text-xs mt-1 text-red-500">{errors.dueDate}</p>}
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
+                        <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+                            <option>Low</option><option>Medium</option><option>High</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
         <div className="mt-6 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-          <button onClick={handleAdd} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Task</button>
+          <button onClick={onClose} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50">Cancel</button>
+          <button onClick={handleAdd} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50">
+            {isProcessing ? 'Adding Task...' : 'Add Task'}
+          </button>
         </div>
       </Modal>
     );
@@ -671,83 +711,221 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
 
 // Edit Task Modal Component
 const EditTaskModal = ({ task, lists, isOpen, onClose, onSave }) => {
-  const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState('Medium');
-  const [listId, setListId] = useState('');
-  const [dueDate, setDueDate] = useState('');
+    const [title, setTitle] = useState('');
+    const [priority, setPriority] = useState('Medium');
+    const [listId, setListId] = useState('');
+    const [dueDate, setDueDate] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [apiError, setApiError] = useState(null);
+    const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    if (task) {
-      setTitle(task.title);
-      setPriority(task.priority);
-      setListId(task.listId);
-      setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
-    }
-  }, [task]);
+    useEffect(() => {
+        if (task) {
+            setTitle(task.title);
+            setPriority(task.priority);
+            setListId(task.listId);
+            setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
+        }
+    }, [task]);
 
-  const handleSave = () => onSave({ ...task, title, priority, listId, dueDate });
+    useEffect(() => {
+        if (!isOpen) {
+            setTimeout(() => {
+                setIsProcessing(false);
+                setApiError(null);
+                setSuccess(false);
+            }, 300);
+        }
+    }, [isOpen]);
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold text-white">Edit Task</h3>
-        <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-700"><X size={20} /></button>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
-          <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-            {lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
-          </select>
-        </div>
-        <div className="flex gap-4">
-            <div className="flex-1">
-                <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+    const handleSave = async () => {
+        if (!title.trim()) {
+            setApiError("Title cannot be empty.");
+            return;
+        }
+        setIsProcessing(true);
+        setApiError(null);
+        setSuccess(false);
+        try {
+            await onSave({ ...task, title, priority, listId, dueDate });
+            setSuccess(true);
+            setTimeout(onClose, 2000);
+        } catch (err) {
+            setApiError("Failed to save changes. Please try again.");
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-white">Edit Task</h3>
+                <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-700"><X size={20} /></button>
             </div>
-            <div className="flex-1">
-                <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
-                <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <option>Low</option><option>Medium</option><option>High</option>
-                </select>
+            {success && (
+                <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 rounded-md" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> Task updated. This window will close shortly.</span>
+                </div>
+            )}
+            {apiError && (
+                <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4" role="alert">
+                    <strong className="font-bold">Error:</strong>
+                    <span className="block sm:inline"> {apiError}</span>
+                </div>
+            )}
+            {!success && (
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
+                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
+                        <select value={listId} onChange={(e) => setListId(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+                            {lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
+                            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
+                            <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={isProcessing} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+                                <option>Low</option><option>Medium</option><option>High</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+                <button onClick={onClose} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50">Cancel</button>
+                <button onClick={handleSave} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50">
+                    {isProcessing ? 'Saving...' : 'Save Changes'}
+                </button>
             </div>
-        </div>
-      </div>
-      <div className="mt-6 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-        <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Save Changes</button>
-      </div>
-    </Modal>
-  );
+        </Modal>
+    );
 };
 
+
 // Confirm Delete Task Modal Component
-const ConfirmDeleteModal = ({ task, isOpen, onClose, onConfirm }) => (
-  <Modal isOpen={isOpen} onClose={onClose}>
-    <h3 className="text-lg font-bold text-white">Confirm Deletion</h3>
-    <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the task "{task?.title}"? This action cannot be undone.</p>
-    <div className="flex justify-end gap-3">
-      <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-      <button onClick={() => onConfirm(task.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
-    </div>
-  </Modal>
-);
+const ConfirmDeleteModal = ({ task, isOpen, onClose, onConfirm }) => {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setTimeout(() => {
+                setIsProcessing(false);
+                setError(null);
+                setSuccess(false);
+            }, 300);
+        }
+    }, [isOpen]);
+
+    const handleConfirm = async () => {
+        setIsProcessing(true);
+        setError(null);
+        setSuccess(false);
+        try {
+            await onConfirm(task.id);
+            setSuccess(true);
+            setTimeout(onClose, 2000);
+        } catch (err) {
+            setError("Failed to delete task. Please try again.");
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <h3 className="text-lg font-bold text-white">Confirm Deletion</h3>
+            {success && (
+                <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 my-4 rounded-md" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> Task deleted. This window will close shortly.</span>
+                </div>
+            )}
+            {error && (
+                <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 my-4 rounded-md" role="alert">
+                    <strong className="font-bold">Error:</strong>
+                    <span className="block sm:inline"> {error}</span>
+                </div>
+            )}
+            {!success && !error && (
+                 <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the task "{task?.title}"? This action cannot be undone.</p>
+            )}
+            <div className="flex justify-end gap-3">
+                <button onClick={onClose} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50">Cancel</button>
+                <button onClick={handleConfirm} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50">
+                    {isProcessing ? 'Deleting...' : 'Delete'}
+                </button>
+            </div>
+        </Modal>
+    );
+};
 
 // Confirm Delete Category Modal Component
-const ConfirmDeleteCategoryModal = ({ category, isOpen, onClose, onConfirm }) => (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <h3 className="text-lg font-bold text-white">Confirm Category Deletion</h3>
-      <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the category "<strong>{category?.name}</strong>"? All tasks within this category will also be permanently deleted.</p>
-      <div className="flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-        <button onClick={() => onConfirm(category.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
-      </div>
-    </Modal>
-);
+const ConfirmDeleteCategoryModal = ({ category, isOpen, onClose, onConfirm }) => {
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setTimeout(() => {
+                setIsProcessing(false);
+                setError(null);
+                setSuccess(false);
+            }, 300);
+        }
+    }, [isOpen]);
+
+    const handleConfirm = async () => {
+        setIsProcessing(true);
+        setError(null);
+        setSuccess(false);
+        try {
+            await onConfirm(category.id);
+            setSuccess(true);
+            setTimeout(onClose, 2000);
+        } catch (err) {
+            setError("Failed to delete category. Please try again.");
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <h3 className="text-lg font-bold text-white">Confirm Category Deletion</h3>
+            {success && (
+                <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 my-4 rounded-md" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> Category deleted. This window will close shortly.</span>
+                </div>
+            )}
+            {error && (
+                <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 my-4 rounded-md" role="alert">
+                    <strong className="font-bold">Error:</strong>
+                    <span className="block sm:inline"> {error}</span>
+                </div>
+            )}
+            {!success && !error && (
+                <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the category "<strong>{category?.name}</strong>"? All tasks within this category will also be permanently deleted.</p>
+            )}
+            <div className="flex justify-end gap-3">
+                <button onClick={onClose} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50">Cancel</button>
+                <button onClick={handleConfirm} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50">
+                    {isProcessing ? 'Deleting...' : 'Delete'}
+                </button>
+            </div>
+        </Modal>
+    );
+};
 
 // Confirm Logout Modal Component
 const ConfirmLogoutModal = ({ isOpen, onClose, onConfirm }) => (
@@ -763,18 +941,75 @@ const ConfirmLogoutModal = ({ isOpen, onClose, onConfirm }) => (
 
 // Add List Modal Component
 const AddListModal = ({ isOpen, onClose, onAdd }) => {
-  const [listName, setListName] = useState('');
-  const handleAdd = () => { if (listName.trim()) { onAdd(listName.trim()); setListName(''); } };
-  return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <h3 className="text-lg font-bold text-white mb-4">Add New Category</h3>
-      <input type="text" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="Enter category name" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-      <div className="mt-6 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-        <button onClick={handleAdd} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Category</button>
-      </div>
-    </Modal>
-  );
+    const [listName, setListName] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setTimeout(() => {
+                setListName('');
+                setIsProcessing(false);
+                setError(null);
+                setSuccess(false);
+            }, 300);
+        }
+    }, [isOpen]);
+
+    const handleAdd = async () => {
+        if (!listName.trim()) {
+            setError("Category name cannot be empty.");
+            return;
+        }
+
+        setIsProcessing(true);
+        setError(null);
+        setSuccess(false);
+
+        try {
+            await onAdd(listName.trim());
+            setSuccess(true);
+            setTimeout(onClose, 2000);
+        } catch (err) {
+            setError("Could not add category. Please try again.");
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <h3 className="text-lg font-bold text-white mb-4">Add New Category</h3>
+            {success && (
+                <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 rounded-md" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> Category added. This window will close shortly.</span>
+                </div>
+            )}
+            {error && (
+                <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4" role="alert">
+                    <strong className="font-bold">Error:</strong>
+                    <span className="block sm:inline"> {error}</span>
+                </div>
+            )}
+            {!success && (
+                <input
+                    type="text"
+                    value={listName}
+                    onChange={(e) => setListName(e.target.value)}
+                    placeholder="Enter category name"
+                    disabled={isProcessing}
+                    className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                />
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+                <button onClick={onClose} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50">Cancel</button>
+                <button onClick={handleAdd} disabled={isProcessing || success} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50">
+                    {isProcessing ? 'Adding...' : 'Add Category'}
+                </button>
+            </div>
+        </Modal>
+    );
 };
 
 // Change Password Modal Component

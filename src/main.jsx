@@ -13,7 +13,8 @@ const root = createRoot(document.getElementById('root'));
 root.render(
   <StrictMode>
     <BrowserRouter>
-      <Login />
+      {/* <Login /> */}
+      <App />
     </BrowserRouter>
   </StrictMode>
 );

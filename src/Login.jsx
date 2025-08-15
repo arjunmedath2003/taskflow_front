@@ -44,42 +44,6 @@ export default function App() {
     );
 }
 
-// Dark Mode Toggle Component
-// const DarkModeToggle = () => {
-//     const [isDarkMode, setIsDarkMode] = useState(false);
-
-//     useEffect(() => {
-//         const savedTheme = localStorage.getItem('theme');
-//         if (savedTheme === 'dark') {
-//             document.documentElement.classList.add('dark');
-//             setIsDarkMode(true);
-//         } else {
-//             document.documentElement.classList.remove('dark');
-//             setIsDarkMode(false);
-//         }
-//     }, []);
-
-//     const toggleTheme = () => {
-//         if (isDarkMode) {
-//             document.documentElement.classList.remove('dark');
-//             localStorage.setItem('theme', 'light');
-//         } else {
-//             document.documentElement.classList.add('dark');
-//             localStorage.setItem('theme', 'dark');
-//         }
-//         setIsDarkMode(!isDarkMode);
-//     };
-
-//     return (
-//         <button
-//             onClick={toggleTheme}
-//             className="absolute top-4 right-4 p-2 rounded-full bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 transition-colors duration-300"
-//             aria-label="Toggle dark mode"
-//         >
-//             {isDarkMode ? <Sun className="h-6 w-6 text-yellow-400" /> : <Moon className="h-6 w-6 text-stone-600" />}
-//         </button>
-//     );
-// };
 
 // Password Strength Indicator Component
 const PasswordStrengthIndicator = ({ password }) => {
@@ -269,7 +233,6 @@ const AuthPage = ({ onAuthSuccess }) => {
 
     return (
         <div className="flex items-center justify-center min-h-screen p-4">
-            {/* <DarkModeToggle /> */}
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-green-600 dark:text-green-400">TaskFlow</h1>
@@ -343,7 +306,6 @@ const AuthPage = ({ onAuthSuccess }) => {
 const WelcomePage = ({ user, onLogout }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-             {/* <DarkModeToggle /> */}
             <div className="bg-white dark:bg-stone-800/50 backdrop-blur-sm p-10 rounded-xl shadow-lg border border-stone-200 dark:border-stone-700">
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
                 <h1 className="text-3xl font-bold mb-2">Welcome{user.name ? `, ${user.name}` : ''}!</h1>

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, MoreVertical, LayoutDashboard, Trash2, Edit, Calendar as CalendarIcon, ChevronsLeft, X, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import taskflowLogo from './assets/taskflow.svg';
 import "./App.css"
@@ -55,6 +56,19 @@ export default function App() {
   const [isAddListModalOpen, setIsAddListModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    } else {
+      // If no user, redirect to login
+      navigate('/login');
+    }
+  }, [navigate]);
+
 
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
@@ -95,9 +109,11 @@ export default function App() {
     setCategoryToDelete(null);
   };
   const handleLogout = () => {
-      console.log("User logged out.");
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
       setIsLogoutModalOpen(false);
-      // Here you would typically clear user session, tokens, etc.
+      navigate('/login');
   }
 
   const selectedList = lists.find(list => list.id === selectedListId);
@@ -116,7 +132,8 @@ export default function App() {
         />
 
         <div className="flex-1 flex flex-col h-screen">
-          <Header 
+          <Header
+            user={user}
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
             filters={filters}
@@ -206,7 +223,7 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
 };
 
 // Header Component
-const Header = ({ searchTerm, setSearchTerm, filters, setFilters, onChangePasswordClick, onAddTaskClick, onLogoutRequest }) => {
+const Header = ({ user, searchTerm, setSearchTerm, filters, setFilters, onChangePasswordClick, onAddTaskClick, onLogoutRequest }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
@@ -239,13 +256,13 @@ const Header = ({ searchTerm, setSearchTerm, filters, setFilters, onChangePasswo
           <FilterPopover filters={filters} setFilters={setFilters} />
           <div className="relative" ref={profileRef}>
              <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-green-800 flex items-center justify-center">
-                <span className="font-bold text-green-300">A</span>
+                <span className="font-bold text-green-300">{user?.name?.charAt(0).toUpperCase() || 'U'}</span>
              </button>
              {isProfileOpen && (
                 <div className="absolute right-0 z-10 w-56 mt-2 origin-top-right bg-stone-800 border border-stone-700 rounded-md shadow-lg">
                     <div className="p-4 border-b border-stone-700">
-                        <p className="text-sm font-semibold text-stone-200">Admin</p>
-                        <p className="text-xs text-stone-400">admin@taskflow.com</p>
+                        <p className="text-sm font-semibold text-stone-200">{user?.name || 'User'}</p>
+                        <p className="text-xs text-stone-400">{user?.email || 'user@example.com'}</p>
                     </div>
                     <div className="py-2">
                         <button onClick={() => { onChangePasswordClick(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-stone-300 hover:bg-stone-700">Change Password</button>

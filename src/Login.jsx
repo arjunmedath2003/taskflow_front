@@ -1,45 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, Moon, Eye, EyeOff, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
-// Main App Component - Manages routing between Auth and Welcome pages
-export default function App() {
-    const [user, setUser] = useState(null);
+// Main Login Component - Manages auth and redirects
+export default function Login() {
+    const navigate = useNavigate();
+    // Check for token on initial render
     const [token, setToken] = useState(localStorage.getItem('token'));
 
-    // This effect could be used to verify the token with the backend on app load
+    // This effect checks if the user is already logged in and redirects them.
     useEffect(() => {
-        if (token) {
-            // Here you would typically verify the token with the backend
-            // For now, we'll just parse it for user data if it exists
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                setUser(JSON.parse(storedUser));
-            }
+        const storedUser = localStorage.getItem('user');
+        if (token && storedUser) {
+            navigate('/app'); // Redirect to main app page if already logged in
         }
-    }, [token]);
+    }, [token, navigate]);
 
-
-    const handleLoginSuccess = (data) => {
+    // This function is called upon successful authentication
+    const handleAuthSuccess = (data) => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         setToken(data.token);
-        setUser(data.user);
+        navigate('/app'); // Redirect to main app page after login/signup
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setToken(null);
-        setUser(null);
-    };
+    // While checking for a token or redirecting, we can render nothing or a loading spinner
+    if (token) {
+        return null; // Or a loading component
+    }
 
     return (
         <div className="antialiased text-stone-700 dark:text-stone-300 bg-stone-50 dark:bg-stone-900 min-h-screen">
-            {user ? (
-                <WelcomePage user={user} onLogout={handleLogout} />
-            ) : (
-                <AuthPage onAuthSuccess={handleLoginSuccess} />
-            )}
+            <AuthPage onAuthSuccess={handleAuthSuccess} />
         </div>
     );
 }
@@ -71,7 +63,7 @@ const PasswordStrengthIndicator = ({ password }) => {
                 ))}
             </div>
             <p className={`text-xs mt-1 text-right font-medium ${
-                strength === 0 ? 'text-stone-500' : 
+                strength === 0 ? 'text-stone-500' :
                 strength === 1 ? 'text-red-500' :
                 strength === 2 ? 'text-orange-500' :
                 strength === 3 ? 'text-yellow-500' : 'text-green-500'
@@ -101,9 +93,9 @@ const InputField = ({ id, label, type, value, onChange, placeholder, error, touc
                     onChange={onChange}
                     placeholder={placeholder}
                     className={`w-full px-4 py-2 border rounded-md bg-transparent focus:ring-2 focus:outline-none transition ${
-                        hasError 
-                        ? 'border-red-500 focus:ring-red-500' 
-                        : isValid 
+                        hasError
+                        ? 'border-red-500 focus:ring-red-500'
+                        : isValid
                         ? 'border-green-500 focus:ring-green-500'
                         : 'border-stone-300 dark:border-stone-600 focus:ring-green-500 focus:border-green-500'
                     }`}
@@ -205,7 +197,7 @@ const AuthPage = ({ onAuthSuccess }) => {
         setErrors({});
 
         const endpoint = isLogin ? '/auth/login' : '/auth/signup';
-        const payload = isLogin 
+        const payload = isLogin
             ? { email: values.email, password: values.password }
             : { name: values.name, email: values.email, password: values.password };
 
@@ -297,25 +289,6 @@ const AuthPage = ({ onAuthSuccess }) => {
                         {isLogin ? 'Sign up' : 'Login'}
                     </button>
                 </p>
-            </div>
-        </div>
-    );
-};
-
-// Welcome Page Component
-const WelcomePage = ({ user, onLogout }) => {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-            <div className="bg-white dark:bg-stone-800/50 backdrop-blur-sm p-10 rounded-xl shadow-lg border border-stone-200 dark:border-stone-700">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <h1 className="text-3xl font-bold mb-2">Welcome{user.name ? `, ${user.name}` : ''}!</h1>
-                <p className="text-stone-600 dark:text-stone-400 mb-6">You have successfully logged in as {user.email}.</p>
-                <button
-                    onClick={onLogout}
-                    className="py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-stone-900 transition-colors"
-                >
-                    Logout
-                </button>
             </div>
         </div>
     );

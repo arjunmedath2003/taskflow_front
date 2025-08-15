@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Search, MoreVertical, Sun, Moon, LayoutDashboard, Trash2, Edit, Calendar as CalendarIcon, ChevronsLeft, ChevronsRight, X, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, MoreVertical, LayoutDashboard, Trash2, Edit, Calendar as CalendarIcon, ChevronsLeft, X, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import taskflowLogo from './assets/taskflow.svg';
 import "./App.css"
 
 // Mock Data
@@ -30,13 +31,14 @@ const priorityConfig = {
 const Modal = ({ children, isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center" onClick={onClose}>
-      <div className="bg-white dark:bg-stone-800 rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center" onClick={onClose}>
+      <div className="bg-white dark:bg-stone-800 rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
   );
 };
+
 
 // Main App Component
 export default function App() {
@@ -45,7 +47,6 @@ export default function App() {
   const [selectedListId, setSelectedListId] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ status: [], priority: [] });
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -53,8 +54,8 @@ export default function App() {
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [isAddListModalOpen, setIsAddListModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
   const filteredTasks = useMemo(() => {
@@ -93,12 +94,17 @@ export default function App() {
     if (selectedListId === listId) setSelectedListId('all');
     setCategoryToDelete(null);
   };
+  const handleLogout = () => {
+      console.log("User logged out.");
+      setIsLogoutModalOpen(false);
+      // Here you would typically clear user session, tokens, etc.
+  }
 
   const selectedList = lists.find(list => list.id === selectedListId);
 
   return (
-    <div className={`${isDarkMode ? 'dark' : ''} font-sans`}>
-      <div className="flex h-screen bg-stone-100 dark:bg-stone-900 text-stone-800 dark:text-stone-200">
+    <div className="dark font-sans">
+      <div className="flex h-screen bg-stone-900 text-stone-200">
         <Sidebar 
           lists={lists} 
           selectedListId={selectedListId} 
@@ -115,14 +121,13 @@ export default function App() {
             setSearchTerm={setSearchTerm}
             filters={filters}
             setFilters={setFilters}
-            isDarkMode={isDarkMode}
-            toggleDarkMode={toggleDarkMode}
             onChangePasswordClick={() => setIsChangePasswordModalOpen(true)}
             onAddTaskClick={() => setIsAddTaskModalOpen(true)}
+            onLogoutRequest={() => setIsLogoutModalOpen(true)}
           />
 
           <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto relative">
-            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">
               {selectedListId === 'all' ? 'All Tasks' : selectedList?.name || 'Tasks'}
             </h1>
             <TaskList 
@@ -138,6 +143,7 @@ export default function App() {
         <AddListModal isOpen={isAddListModalOpen} onClose={() => setIsAddListModalOpen(false)} onAdd={handleAddList} />
         <ChangePasswordModal isOpen={isChangePasswordModalOpen} onClose={() => setIsChangePasswordModalOpen(false)} />
         <ConfirmDeleteCategoryModal category={categoryToDelete} isOpen={!!categoryToDelete} onClose={() => setCategoryToDelete(null)} onConfirm={handleDeleteCategory} />
+        <ConfirmLogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleLogout} />
       </div>
     </div>
   );
@@ -146,20 +152,16 @@ export default function App() {
 // Sidebar Component
 const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onToggle, onAddListClick, onDeleteCategoryRequest }) => {
     const Logo = () => (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 5H7C5.89543 5 5 5.89543 5 7V17C5 18.1046 5.89543 19 7 19H9" />
-            <path d="M13 5H15C16.1046 5 17 5.89543 17 7V17C17 18.1046 16.1046 19 15 19H13" />
-            <path d="M9 9.5L13 9.5" /><path d="M9 14.5L13 14.5" />
-        </svg>
+        <img src={taskflowLogo} alt="TaskFlow Logo" className="w-7 h-7" />
     );
   return (
-    <aside className={`bg-white dark:bg-stone-800 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
-      <div className={`flex items-center p-4 border-b border-stone-200 dark:border-stone-700 h-16 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-        <div onClick={isCollapsed ? onToggle : undefined} className={`flex items-center gap-2 text-green-600 dark:text-green-400 ${isCollapsed ? 'cursor-pointer' : ''}`}>
+    <aside className={`bg-stone-800 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
+      <div className={`flex items-center p-4 border-b border-stone-700 h-16 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        <div onClick={isCollapsed ? onToggle : undefined} className={`flex items-center gap-2 text-green-400 ${isCollapsed ? 'cursor-pointer' : ''}`}>
             <Logo />
             {!isCollapsed && <h1 className="text-xl font-bold">TaskFlow</h1>}
         </div>
-        <button onClick={onToggle} className={`p-2 rounded-md hover:bg-stone-100 dark:hover:bg-stone-700 ${isCollapsed ? 'hidden' : ''}`}>
+        <button onClick={onToggle} className={`p-2 rounded-md hover:bg-stone-700 ${isCollapsed ? 'hidden' : ''}`}>
           <ChevronsLeft size={20} />
         </button>
       </div>
@@ -172,7 +174,7 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
             <li className="group relative">
                 <a href="#" onClick={(e) => {e.preventDefault(); setSelectedListId('all')}}
                     className={`flex items-center gap-3 px-4 py-2 text-sm rounded-md transition-colors w-full ${
-                    selectedListId === 'all' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 font-semibold' : 'hover:bg-stone-100 dark:hover:bg-stone-700'
+                    selectedListId === 'all' ? 'bg-green-900/50 text-green-300 font-semibold' : 'hover:bg-stone-700'
                     } ${isCollapsed ? 'justify-center' : ''}`}>
                     {isCollapsed ? <span className="font-bold text-lg">A</span> : <LayoutDashboard size={16} />}
                     {!isCollapsed && <span className="flex-1">All</span>}
@@ -182,7 +184,7 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
             <li key={list.id} className="group relative">
               <a href="#" onClick={(e) => {e.preventDefault(); setSelectedListId(list.id)}}
                 className={`flex items-center gap-3 px-4 py-2 text-sm rounded-md transition-colors w-full ${
-                  selectedListId === list.id ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 font-semibold' : 'hover:bg-stone-100 dark:hover:bg-stone-700'
+                  selectedListId === list.id ? 'bg-green-900/50 text-green-300 font-semibold' : 'hover:bg-stone-700'
                 } ${isCollapsed ? 'justify-center' : ''}`}>
                 {isCollapsed ? 
                     <span className="font-bold text-lg">{list.name.charAt(0).toUpperCase()}</span> : 
@@ -204,7 +206,7 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
 };
 
 // Header Component
-const Header = ({ searchTerm, setSearchTerm, filters, setFilters, isDarkMode, toggleDarkMode, onChangePasswordClick, onAddTaskClick }) => {
+const Header = ({ searchTerm, setSearchTerm, filters, setFilters, onChangePasswordClick, onAddTaskClick, onLogoutRequest }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
@@ -217,15 +219,15 @@ const Header = ({ searchTerm, setSearchTerm, filters, setFilters, isDarkMode, to
   }, [profileRef]);
 
   return (
-    <header className="flex-shrink-0 bg-white dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 h-16">
+    <header className="flex-shrink-0 bg-stone-800 border-b border-stone-700 h-16">
       <div className="flex items-center justify-between p-4 h-full">
         <div className="relative w-full max-w-xs">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input type="text" placeholder="Search tasks..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full pl-10 pr-10 py-2 text-sm bg-stone-700 border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
           />
           {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200">
+            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-200">
                 <X size={16} />
             </button>
           )}
@@ -235,22 +237,19 @@ const Header = ({ searchTerm, setSearchTerm, filters, setFilters, isDarkMode, to
             <Plus size={16} /> Add Task
           </button>
           <FilterPopover filters={filters} setFilters={setFilters} />
-          <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700">
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
           <div className="relative" ref={profileRef}>
-             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-green-200 dark:bg-green-800 flex items-center justify-center">
-                <span className="font-bold text-green-700 dark:text-green-300">A</span>
+             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-10 h-10 rounded-full bg-green-800 flex items-center justify-center">
+                <span className="font-bold text-green-300">A</span>
              </button>
              {isProfileOpen && (
-                <div className="absolute right-0 z-10 w-56 mt-2 origin-top-right bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md shadow-lg">
-                    <div className="p-4 border-b border-stone-200 dark:border-stone-700">
-                        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">Admin</p>
-                        <p className="text-xs text-stone-500 dark:text-stone-400">admin@taskflow.com</p>
+                <div className="absolute right-0 z-10 w-56 mt-2 origin-top-right bg-stone-800 border border-stone-700 rounded-md shadow-lg">
+                    <div className="p-4 border-b border-stone-700">
+                        <p className="text-sm font-semibold text-stone-200">Admin</p>
+                        <p className="text-xs text-stone-400">admin@taskflow.com</p>
                     </div>
                     <div className="py-2">
-                        <button onClick={() => { onChangePasswordClick(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700">Change Password</button>
-                        <button className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-stone-100 dark:hover:bg-stone-700">Logout</button>
+                        <button onClick={() => { onChangePasswordClick(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-stone-300 hover:bg-stone-700">Change Password</button>
+                        <button onClick={() => { onLogoutRequest(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-stone-700">Logout</button>
                     </div>
                 </div>
              )}
@@ -292,26 +291,26 @@ const FilterPopover = ({ filters, setFilters }) => {
 
     const FilterButton = ({ type, value }) => (
         <button onClick={() => handleFilterClick(type, value)}
-            className={`px-3 py-1 text-sm rounded-full transition-colors ${tempFilters[type].includes(value) ? 'bg-green-600 text-white' : 'bg-stone-100 dark:bg-stone-700 hover:bg-stone-200 dark:hover:bg-stone-600'}`}
+            className={`px-3 py-1 text-sm rounded-full transition-colors ${tempFilters[type].includes(value) ? 'bg-green-600 text-white' : 'bg-stone-700 hover:bg-stone-600'}`}
         >{value}</button>
     );
 
     return (
         <div className="relative" ref={filterRef}>
-            <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700">
+            <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-stone-700">
                 <Filter size={20} />
             </button>
             {isOpen && (
-                <div className="absolute right-0 z-10 w-64 mt-2 origin-top-right bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md shadow-lg p-4">
+                <div className="absolute right-0 z-10 w-64 mt-2 origin-top-right bg-stone-800 border border-stone-700 rounded-md shadow-lg p-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h4 className="font-semibold text-sm dark:text-white">Filter by Status</h4>
+                        <h4 className="font-semibold text-sm text-white">Filter by Status</h4>
                         <button onClick={clearFilters} className="text-xs text-green-600 hover:underline">Clear Filters</button>
                     </div>
                     <div className="flex gap-2 mb-3">
                         {['Completed', 'Pending'].map(status => <FilterButton key={status} type="status" value={status} />)}
                     </div>
-                    <hr className="my-3 dark:border-stone-600"/>
-                    <h4 className="font-semibold text-sm mb-2 dark:text-white">Filter by Priority</h4>
+                    <hr className="my-3 border-stone-600"/>
+                    <h4 className="font-semibold text-sm mb-2 text-white">Filter by Priority</h4>
                     <div className="flex gap-2">
                         {['High', 'Medium', 'Low'].map(priority => <FilterButton key={priority} type="priority" value={priority} />)}
                     </div>
@@ -330,9 +329,9 @@ const TaskList = ({ tasks, lists, selectedListId, onToggleTask, onDeleteRequest,
 
   if (tasks.length === 0) {
     return (
-        <div className="text-center py-8 px-4 bg-white dark:bg-stone-800 rounded-lg">
-          <h3 className="text-lg font-medium text-stone-900 dark:text-white">No tasks found!</h3>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">Try adjusting your filters or adding a new task.</p>
+        <div className="text-center py-8 px-4 bg-stone-800 rounded-lg">
+          <h3 className="text-lg font-medium text-white">No tasks found!</h3>
+          <p className="mt-1 text-sm text-stone-400">Try adjusting your filters or adding a new task.</p>
         </div>
     );
   }
@@ -346,7 +345,7 @@ const TaskList = ({ tasks, lists, selectedListId, onToggleTask, onDeleteRequest,
       </div>
       {completedTasks.length > 0 && (
         <div className="mt-8">
-          <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-sm font-semibold text-stone-600 dark:text-stone-400 mb-3">
+          <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-sm font-semibold text-stone-400 mb-3">
             {showCompleted ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             Completed ({completedTasks.length})
           </button>
@@ -379,13 +378,13 @@ const TaskCard = ({ task, lists, selectedListId, onToggleTask, onDeleteRequest, 
   }, [menuRef]);
 
   return (
-    <div className={`flex items-center p-4 bg-white dark:bg-stone-800 rounded-lg shadow-sm transition-opacity ${task.isCompleted ? 'opacity-60' : ''}`}>
+    <div className={`flex items-center p-4 bg-stone-800 rounded-lg shadow-sm transition-opacity ${task.isCompleted ? 'opacity-60' : ''}`}>
       <input type="checkbox" checked={task.isCompleted} onChange={() => onToggleTask(task.id)}
         className="w-5 h-5 text-green-600 bg-stone-100 border-stone-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-stone-800 focus:ring-2 dark:bg-stone-700 dark:border-stone-600"
       />
       <div className="flex-1 ml-4">
-        <p className={`text-sm font-medium text-stone-900 dark:text-white ${task.isCompleted ? 'line-through' : ''}`}>{task.title}</p>
-        <div className="flex items-center gap-4 mt-1 text-xs text-stone-500 dark:text-stone-400">
+        <p className={`text-sm font-medium text-white ${task.isCompleted ? 'line-through' : ''}`}>{task.title}</p>
+        <div className="flex items-center gap-4 mt-1 text-xs text-stone-400">
             {task.dueDate && (
                 <div className="flex items-center gap-1.5">
                     <CalendarIcon size={12} />
@@ -406,14 +405,14 @@ const TaskCard = ({ task, lists, selectedListId, onToggleTask, onDeleteRequest, 
           {task.priority}
         </span>
         <div className="relative" ref={menuRef}>
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700">
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1 rounded-full hover:bg-stone-700">
             <MoreVertical size={18} className="text-stone-500" />
           </button>
           {isMenuOpen && (
-            <div className="absolute right-0 z-10 w-32 mt-2 origin-top-right bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md shadow-lg">
+            <div className="absolute right-0 z-10 w-32 mt-2 origin-top-right bg-stone-800 border border-stone-700 rounded-md shadow-lg">
               <div className="py-1">
-                <button onClick={() => { onEditRequest(task); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700"><Edit size={14} /> Edit</button>
-                <button onClick={() => { onDeleteRequest(task); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-stone-100 dark:hover:bg-stone-700"><Trash2 size={14} /> Delete</button>
+                <button onClick={() => { onEditRequest(task); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-stone-300 hover:bg-stone-700"><Edit size={14} /> Edit</button>
+                <button onClick={() => { onDeleteRequest(task); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-stone-700"><Trash2 size={14} /> Delete</button>
               </div>
             </div>
           )}
@@ -456,38 +455,38 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
     return (
       <Modal isOpen={isOpen} onClose={onClose}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold dark:text-white">Add New Task</h3>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-200 dark:hover:bg-stone-700"><X size={20} /></button>
+          <h3 className="text-lg font-bold text-white">Add New Task</h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-700"><X size={20} /></button>
         </div>
         <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Task Title</label>
-                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+                <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
                 {errors.title && <p className="text-xs mt-1 text-red-500">{errors.title}</p>}
             </div>
             <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Category</label>
-                <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
+                <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
                     {lists.length > 0 ? lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>) : <option disabled>Create a category first</option>}
                 </select>
                 {errors.listId && <p className="text-xs mt-1 text-red-500">{errors.listId}</p>}
             </div>
             <div className="flex gap-4">
                 <div className="flex-1">
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Due Date</label>
-                    <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getTomorrowDate()} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+                    <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
+                    <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getTomorrowDate()} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
                     {errors.dueDate && <p className="text-xs mt-1 text-red-500">{errors.dueDate}</p>}
                 </div>
                 <div className="flex-1">
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Priority</label>
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
                         <option>Low</option><option>Medium</option><option>High</option>
                     </select>
                 </div>
             </div>
         </div>
         <div className="mt-6 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
           <button onClick={handleAdd} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Task</button>
         </div>
       </Modal>
@@ -513,29 +512,29 @@ const EditTaskModal = ({ task, lists, isOpen, onClose, onSave }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold dark:text-white">Edit Task</h3>
-        <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-200 dark:hover:bg-stone-700"><X size={20} /></button>
+        <h3 className="text-lg font-bold text-white">Edit Task</h3>
+        <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-700"><X size={20} /></button>
       </div>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Task Title</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+          <label className="block text-sm font-medium text-stone-300 mb-1">Task Title</label>
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Category</label>
-          <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+          <label className="block text-sm font-medium text-stone-300 mb-1">Category</label>
+          <select value={listId} onChange={(e) => setListId(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
             {lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Priority</label>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+          <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
             <option>Low</option><option>Medium</option><option>High</option>
           </select>
         </div>
       </div>
       <div className="mt-6 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
         <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Save Changes</button>
       </div>
     </Modal>
@@ -545,10 +544,10 @@ const EditTaskModal = ({ task, lists, isOpen, onClose, onSave }) => {
 // Confirm Delete Task Modal Component
 const ConfirmDeleteModal = ({ task, isOpen, onClose, onConfirm }) => (
   <Modal isOpen={isOpen} onClose={onClose}>
-    <h3 className="text-lg font-bold dark:text-white">Confirm Deletion</h3>
-    <p className="my-4 text-sm text-stone-600 dark:text-stone-300">Are you sure you want to delete the task "{task?.title}"? This action cannot be undone.</p>
+    <h3 className="text-lg font-bold text-white">Confirm Deletion</h3>
+    <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the task "{task?.title}"? This action cannot be undone.</p>
     <div className="flex justify-end gap-3">
-      <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+      <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
       <button onClick={() => onConfirm(task.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
     </div>
   </Modal>
@@ -557,11 +556,23 @@ const ConfirmDeleteModal = ({ task, isOpen, onClose, onConfirm }) => (
 // Confirm Delete Category Modal Component
 const ConfirmDeleteCategoryModal = ({ category, isOpen, onClose, onConfirm }) => (
     <Modal isOpen={isOpen} onClose={onClose}>
-      <h3 className="text-lg font-bold dark:text-white">Confirm Category Deletion</h3>
-      <p className="my-4 text-sm text-stone-600 dark:text-stone-300">Are you sure you want to delete the category "<strong>{category?.name}</strong>"? All tasks within this category will also be permanently deleted.</p>
+      <h3 className="text-lg font-bold text-white">Confirm Category Deletion</h3>
+      <p className="my-4 text-sm text-stone-300">Are you sure you want to delete the category "<strong>{category?.name}</strong>"? All tasks within this category will also be permanently deleted.</p>
       <div className="flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
         <button onClick={() => onConfirm(category.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
+      </div>
+    </Modal>
+);
+
+// Confirm Logout Modal Component
+const ConfirmLogoutModal = ({ isOpen, onClose, onConfirm }) => (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <h3 className="text-lg font-bold text-white">Confirm Logout</h3>
+      <p className="my-4 text-sm text-stone-300">Are you sure you want to log out?</p>
+      <div className="flex justify-end gap-3">
+        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
+        <button onClick={onConfirm} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Logout</button>
       </div>
     </Modal>
 );
@@ -572,10 +583,10 @@ const AddListModal = ({ isOpen, onClose, onAdd }) => {
   const handleAdd = () => { if (listName.trim()) { onAdd(listName.trim()); setListName(''); } };
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
-      <h3 className="text-lg font-bold dark:text-white mb-4">Add New Category</h3>
-      <input type="text" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="Enter category name" className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+      <h3 className="text-lg font-bold text-white mb-4">Add New Category</h3>
+      <input type="text" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="Enter category name" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
       <div className="mt-6 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
         <button onClick={handleAdd} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Category</button>
       </div>
     </Modal>
@@ -612,27 +623,27 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 
     return (
         <Modal isOpen={isOpen} onClose={onClose}>
-            <h3 className="text-lg font-bold dark:text-white mb-4">Change Password</h3>
+            <h3 className="text-lg font-bold text-white mb-4">Change Password</h3>
             <div className="space-y-4">
-                <input type="password" placeholder="Current Password" className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+                <input type="password" placeholder="Current Password" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
                 <div>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" className="w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border border-stone-300 dark:border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
                     {newPassword && (
                         <div className="mt-2">
-                            <div className="h-2 w-full bg-stone-200 dark:bg-stone-600 rounded-full">
+                            <div className="h-2 w-full bg-stone-600 rounded-full">
                                 <div className={`h-2 rounded-full ${strength.color}`} style={{ width: `${strength.score * 20}%` }}></div>
                             </div>
-                            <p className="text-xs mt-1 text-stone-500 dark:text-stone-400">{strength.text}</p>
+                            <p className="text-xs mt-1 text-stone-400">{strength.text}</p>
                         </div>
                     )}
                 </div>
                 <div>
-                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm New Password" className={`w-full px-3 py-2 text-sm bg-stone-100 dark:bg-stone-700 border rounded-md focus:outline-none focus:ring-2 ${matchError ? 'border-red-500 focus:ring-red-500' : 'border-stone-300 dark:border-stone-600 focus:ring-green-500'}`} />
+                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm New Password" className={`w-full px-3 py-2 text-sm bg-stone-700 border rounded-md focus:outline-none focus:ring-2 ${matchError ? 'border-red-500 focus:ring-red-500' : 'border-stone-600 focus:ring-green-500'}`} />
                     {matchError && <p className="text-xs mt-1 text-red-500">{matchError}</p>}
                 </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-                <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-600 rounded-md hover:bg-stone-200 dark:hover:bg-stone-500">Cancel</button>
+                <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
                 <button className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50" disabled={!!matchError || !newPassword}>Update Password</button>
             </div>
         </Modal>

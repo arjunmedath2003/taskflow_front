@@ -1,32 +1,11 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, MoreVertical, LayoutDashboard, Trash2, Edit, Calendar as CalendarIcon, ChevronsLeft, X, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import taskflowLogo from './assets/taskflow.svg';
-import "./App.css"
+import "./App.css";
 
-// Mock Data
-const initialLists = [
-  { id: 'l1', name: 'Work' },
-  { id: 'l2', name: 'Personal' },
-  { id: 'l3', name: 'Shopping' },
-];
-
-const initialTasks = [
-  { id: 't1', listId: 'l1', title: 'Finish Q2 financial report', priority: 'High', dueDate: '2025-08-25', isCompleted: false },
-  { id: 't2', listId: 'l1', title: 'Schedule team meeting', priority: 'Medium', dueDate: '2025-08-22', isCompleted: false },
-  { id: 't3', listId: 'l1', title: 'Review project proposal', priority: 'Low', dueDate: '2025-08-30', isCompleted: true },
-  { id: 't4', listId: 'l2', title: 'Call the dentist', priority: 'High', dueDate: '2025-08-20', isCompleted: false },
-  { id: 't5', listId: 'l2', title: 'Pay electricity bill', priority: 'Medium', dueDate: '2025-08-21', isCompleted: false },
-  { id: 't6', listId: 'l3', title: 'Buy milk and eggs', priority: 'Low', dueDate: '2025-08-19', isCompleted: true },
-  { id: 't7', listId: 'l3', title: 'Get a birthday gift for Sarah', priority: 'High', dueDate: '2025-08-28', isCompleted: false },
-];
-
-// Priority Colors Config
-const priorityConfig = {
-  High: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500' },
-  Medium: { bg: 'bg-yellow-100', text: 'text-yellow-800', dot: 'bg-yellow-500' },
-  Low: { bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500' },
-};
+// API Configuration
+const API_BASE_URL = 'http://localhost:5000';
 
 // Reusable Modal Component
 const Modal = ({ children, isOpen, onClose }) => {
@@ -40,11 +19,27 @@ const Modal = ({ children, isOpen, onClose }) => {
   );
 };
 
+// --- A custom hook to get window width ---
+const useWindowWidth = () => {
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    return windowWidth;
+};
+
 
 // Main App Component
 export default function App() {
-  const [tasks, setTasks] = useState(initialTasks);
-  const [lists, setLists] = useState(initialLists);
+  const [tasks, setTasks] = useState([]);
+  const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ status: [], priority: [] });
@@ -57,21 +52,88 @@ export default function App() {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    } else {
-      // If no user, redirect to login
-      navigate('/login');
+  // --- API Helper Function ---
+  const apiFetch = useCallback(async (url, options = {}) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        navigate('/login');
+        return;
+    }
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}${url}`, { ...options, headers });
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Token is invalid or expired
+                handleLogout(true); // Force logout
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        // Handle responses that might not have a body (e.g., DELETE)
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            return response.json();
+        }
+        return; // No JSON content
+    } catch (error) {
+        console.error("API Fetch Error: ", error);
+        // Propagate the error to be handled by the caller
+        throw error;
     }
   }, [navigate]);
 
+  // --- Initial Data Loading ---
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
 
-  const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
+    if (storedUser && token) {
+      setUser(JSON.parse(storedUser));
+      const fetchData = async () => {
+        setIsLoading(true);
+        const fetchedLists = await apiFetch('/api/lists');
+        const fetchedTasks = await apiFetch('/api/tasks');
+        
+        // Map MongoDB's _id to id for frontend compatibility
+        if (fetchedLists) setLists(fetchedLists.map(l => ({...l, id: l._id})));
+        if (fetchedTasks) setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
+        
+        setIsLoading(false);
+      };
+      fetchData();
+    } else {
+      navigate('/login');
+    }
+  }, [navigate, apiFetch]);
 
+  // Effect to handle sidebar collapse on mobile
+  useEffect(() => {
+    const checkScreenSize = () => {
+      if (window.innerWidth < 768) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  const toggleSidebar = () => {
+    if (window.innerWidth >= 768) {
+        setIsSidebarCollapsed(!isSidebarCollapsed);
+    }
+  };
+
+  // --- Memoized Filtering and Sorting ---
   const filteredTasks = useMemo(() => {
     return tasks
       .filter(task => selectedListId === 'all' || task.listId === selectedListId)
@@ -91,28 +153,98 @@ export default function App() {
       });
   }, [tasks, selectedListId, filters, searchTerm]);
 
-  const handleAddTask = (taskData) => {
-    const newTask = { id: `t${Date.now()}`, isCompleted: false, ...taskData };
-    setTasks(prevTasks => [...prevTasks, newTask]);
-    setIsAddTaskModalOpen(false);
+  // --- CRUD Handlers ---
+
+  const handleAddTask = async (taskData) => {
+    const response = await apiFetch('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify(taskData),
+    });
+    // If the task was created successfully, refetch all tasks to update the UI
+    if (response) {
+        const fetchedTasks = await apiFetch('/api/tasks');
+        if (fetchedTasks) {
+            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
+        }
+        setIsAddTaskModalOpen(false);
+    }
   };
   
-  const handleToggleTask = (taskId) => setTasks(tasks.map(task => task.id === taskId ? { ...task, isCompleted: !task.isCompleted } : task));
-  const handleDeleteTask = (taskId) => { setTasks(tasks.filter(task => task.id !== taskId)); setTaskToDelete(null); };
-  const handleUpdateTask = (updatedTask) => { setTasks(tasks.map(task => task.id === updatedTask.id ? updatedTask : task)); setTaskToEdit(null); };
-  const handleAddList = (listName) => { const newList = { id: `l${Date.now()}`, name: listName }; setLists(prevLists => [...prevLists, newList]); setIsAddListModalOpen(false); };
-  const handleDeleteCategory = (listId) => {
-    const remainingLists = lists.filter(list => list.id !== listId);
-    setLists(remainingLists);
+  const handleToggleTask = async (taskId) => {
+    const taskToUpdate = tasks.find(task => task.id === taskId);
+    if (!taskToUpdate) return;
+
+    const response = await apiFetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...taskToUpdate, isCompleted: !taskToUpdate.isCompleted }),
+    });
+
+    // If the task was updated successfully, refetch all tasks
+    if (response) {
+        const fetchedTasks = await apiFetch('/api/tasks');
+        if (fetchedTasks) {
+            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
+        }
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    setTasks(tasks.filter(task => task.id !== taskId));
+    setTaskToDelete(null);
+  };
+
+  const handleUpdateTask = async (updatedTaskData) => {
+    const response = await apiFetch(`/api/tasks/${updatedTaskData.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatedTaskData),
+    });
+    // If the task was updated successfully, refetch all tasks
+    if (response) {
+        const fetchedTasks = await apiFetch('/api/tasks');
+        if (fetchedTasks) {
+            setTasks(fetchedTasks.map(t => ({...t, id: t._id})));
+        }
+        setTaskToEdit(null);
+    }
+  };
+
+  const handleAddList = async (listName) => {
+    const response = await apiFetch('/api/lists', {
+        method: 'POST',
+        body: JSON.stringify({ name: listName }),
+    });
+    // If the list was created successfully, refetch all lists to update the UI
+    if (response) {
+        const fetchedLists = await apiFetch('/api/lists');
+        if (fetchedLists) {
+            setLists(fetchedLists.map(l => ({...l, id: l._id})));
+        }
+        setIsAddListModalOpen(false);
+    }
+  };
+
+  const handleDeleteCategory = async (listId) => {
+    await apiFetch(`/api/lists/${listId}`, { method: 'DELETE' });
+    setLists(lists.filter(list => list.id !== listId));
     setTasks(prevTasks => prevTasks.filter(task => task.listId !== listId));
     if (selectedListId === listId) setSelectedListId('all');
     setCategoryToDelete(null);
   };
-  const handleLogout = () => {
+
+  const handleChangePassword = async (passwords) => {
+      // Return the promise from apiFetch so the modal can await it
+      return apiFetch('/auth/changepassword', {
+          method: 'POST',
+          body: JSON.stringify(passwords)
+      });
+  }
+
+  const handleLogout = (force = false) => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       setUser(null);
-      setIsLogoutModalOpen(false);
+      if (!force) setIsLogoutModalOpen(false);
       navigate('/login');
   }
 
@@ -128,7 +260,6 @@ export default function App() {
           isCollapsed={isSidebarCollapsed}
           onToggle={toggleSidebar}
           onAddListClick={() => setIsAddListModalOpen(true)}
-          onDeleteCategoryRequest={setCategoryToDelete}
         />
 
         <div className="flex-1 flex flex-col h-screen">
@@ -144,13 +275,28 @@ export default function App() {
           />
 
           <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto relative">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">
-              {selectedListId === 'all' ? 'All Tasks' : selectedList?.name || 'Tasks'}
-            </h1>
-            <TaskList 
-              tasks={filteredTasks} lists={lists} selectedListId={selectedListId}
-              onToggleTask={handleToggleTask} onDeleteRequest={setTaskToDelete} onEditRequest={setTaskToEdit}
-            />
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">
+                  {selectedListId === 'all' ? 'All Tasks' : selectedList?.name || 'Tasks'}
+                </h1>
+                {selectedListId !== 'all' && selectedList?.name !== 'Personal' && (
+                    <button 
+                        onClick={() => setCategoryToDelete(selectedList)} 
+                        className="p-2 rounded-md text-stone-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-stone-700"
+                        aria-label="Delete Category"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                )}
+            </div>
+            {isLoading ? (
+                <div className="text-center py-8">Loading tasks...</div>
+            ) : (
+                <TaskList 
+                  tasks={filteredTasks} lists={lists} selectedListId={selectedListId}
+                  onToggleTask={handleToggleTask} onDeleteRequest={setTaskToDelete} onEditRequest={setTaskToEdit}
+                />
+            )}
           </main>
         </div>
         
@@ -158,7 +304,7 @@ export default function App() {
         <ConfirmDeleteModal task={taskToDelete} isOpen={!!taskToDelete} onClose={() => setTaskToDelete(null)} onConfirm={handleDeleteTask} />
         <AddTaskModal isOpen={isAddTaskModalOpen} onClose={() => setIsAddTaskModalOpen(false)} onAdd={handleAddTask} lists={lists} />
         <AddListModal isOpen={isAddListModalOpen} onClose={() => setIsAddListModalOpen(false)} onAdd={handleAddList} />
-        <ChangePasswordModal isOpen={isChangePasswordModalOpen} onClose={() => setIsChangePasswordModalOpen(false)} />
+        <ChangePasswordModal isOpen={isChangePasswordModalOpen} onClose={() => setIsChangePasswordModalOpen(false)} onSave={handleChangePassword} />
         <ConfirmDeleteCategoryModal category={categoryToDelete} isOpen={!!categoryToDelete} onClose={() => setCategoryToDelete(null)} onConfirm={handleDeleteCategory} />
         <ConfirmLogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={handleLogout} />
       </div>
@@ -166,8 +312,10 @@ export default function App() {
   );
 }
 
+// --- CHILD COMPONENTS ---
+
 // Sidebar Component
-const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onToggle, onAddListClick, onDeleteCategoryRequest }) => {
+const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onToggle, onAddListClick }) => {
     const Logo = () => (
         <img src={taskflowLogo} alt="TaskFlow Logo" className="w-7 h-7" />
     );
@@ -209,11 +357,6 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
                 }
                 {!isCollapsed && <span className="flex-1">{list.name}</span>}
               </a>
-              {!isCollapsed && (
-                  <button onClick={() => onDeleteCategoryRequest(list)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-stone-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-stone-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={14} />
-                  </button>
-              )}
             </li>
           ))}
         </ul>
@@ -226,6 +369,8 @@ const Sidebar = ({ lists, selectedListId, setSelectedListId, isCollapsed, onTogg
 const Header = ({ user, searchTerm, setSearchTerm, filters, setFilters, onChangePasswordClick, onAddTaskClick, onLogoutRequest }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const windowWidth = useWindowWidth(); // Use the hook to get screen width
+  const isMobile = windowWidth < 640; // Tailwind's 'sm' breakpoint
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -250,8 +395,13 @@ const Header = ({ user, searchTerm, setSearchTerm, filters, setFilters, onChange
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onAddTaskClick} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 flex items-center gap-2">
-            <Plus size={16} /> Add Task
+          <button 
+            onClick={onAddTaskClick} 
+            className={`flex items-center justify-center text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 gap-2 ${isMobile ? 'w-10 h-10' : 'px-4 py-2'}`}
+            aria-label="Add Task"
+          >
+            <Plus size={16} />
+            {!isMobile && <span>Add Task</span>}
           </button>
           <FilterPopover filters={filters} setFilters={setFilters} />
           <div className="relative" ref={profileRef}>
@@ -290,6 +440,10 @@ const FilterPopover = ({ filters, setFilters }) => {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [filterRef]);
+
+    useEffect(() => {
+        setTempFilters(filters);
+    }, [filters]);
 
     const handleFilterClick = (type, value) => {
         const currentValues = tempFilters[type];
@@ -381,6 +535,11 @@ const TaskList = ({ tasks, lists, selectedListId, onToggleTask, onDeleteRequest,
 
 // Task Card Component
 const TaskCard = ({ task, lists, selectedListId, onToggleTask, onDeleteRequest, onEditRequest }) => {
+  const priorityConfig = {
+    High: { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500' },
+    Medium: { bg: 'bg-yellow-100', text: 'text-yellow-800', dot: 'bg-yellow-500' },
+    Low: { bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500' },
+  };
   const { bg, text, dot } = priorityConfig[task.priority];
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -395,7 +554,7 @@ const TaskCard = ({ task, lists, selectedListId, onToggleTask, onDeleteRequest, 
   }, [menuRef]);
 
   return (
-    <div className={`flex items-center p-4 bg-stone-800 rounded-lg shadow-sm transition-opacity ${task.isCompleted ? 'opacity-60' : ''}`}>
+    <div className={`relative flex items-center p-4 bg-stone-800 rounded-lg shadow-sm transition-opacity ${task.isCompleted ? 'opacity-60' : ''} ${isMenuOpen ? 'z-10' : 'z-0'}`}>
       <input type="checkbox" checked={task.isCompleted} onChange={() => onToggleTask(task.id)}
         className="w-5 h-5 text-green-600 bg-stone-100 border-stone-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-stone-800 focus:ring-2 dark:bg-stone-700 dark:border-stone-600"
       />
@@ -453,9 +612,9 @@ const AddTaskModal = ({ isOpen, onClose, onAdd, lists }) => {
 
     const validate = () => {
         const newErrors = {};
-        if (!title.trim()) newErrors.title = 'required';
-        if (!listId) newErrors.listId = 'required';
-        if (!dueDate) newErrors.dueDate = 'required';
+        if (!title.trim()) newErrors.title = 'Title is required';
+        if (!listId) newErrors.listId = 'Category is required';
+        if (!dueDate) newErrors.dueDate = 'Due date is required';
         return newErrors;
     }
 
@@ -515,16 +674,18 @@ const EditTaskModal = ({ task, lists, isOpen, onClose, onSave }) => {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [listId, setListId] = useState('');
+  const [dueDate, setDueDate] = useState('');
 
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setPriority(task.priority);
       setListId(task.listId);
+      setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
     }
   }, [task]);
 
-  const handleSave = () => onSave({ ...task, title, priority, listId });
+  const handleSave = () => onSave({ ...task, title, priority, listId, dueDate });
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -543,11 +704,17 @@ const EditTaskModal = ({ task, lists, isOpen, onClose, onSave }) => {
             {lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-            <option>Low</option><option>Medium</option><option>High</option>
-          </select>
+        <div className="flex gap-4">
+            <div className="flex-1">
+                <label className="block text-sm font-medium text-stone-300 mb-1">Due Date</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+            <div className="flex-1">
+                <label className="block text-sm font-medium text-stone-300 mb-1">Priority</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option>Low</option><option>Medium</option><option>High</option>
+                </select>
+            </div>
         </div>
       </div>
       <div className="mt-6 flex justify-end gap-3">
@@ -611,11 +778,15 @@ const AddListModal = ({ isOpen, onClose, onAdd }) => {
 };
 
 // Change Password Modal Component
-const ChangePasswordModal = ({ isOpen, onClose }) => {
+const ChangePasswordModal = ({ isOpen, onClose, onSave }) => {
+    const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [strength, setStrength] = useState({ score: 0, text: '', color: '' });
     const [matchError, setMatchError] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
 
     const checkPasswordStrength = (password) => {
         let score = 0;
@@ -631,6 +802,23 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         setStrength({ score, text, color });
     };
 
+    // Effect to reset state when the modal is closed
+    useEffect(() => {
+        if (!isOpen) {
+            // Delay reset to prevent content flashing before modal disappears
+            setTimeout(() => {
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setStrength({ score: 0, text: '', color: '' });
+                setMatchError('');
+                setIsSaving(false);
+                setSaveError(null);
+                setSaveSuccess(false);
+            }, 300);
+        }
+    }, [isOpen]);
+
     useEffect(() => {
         if (newPassword) checkPasswordStrength(newPassword);
         else setStrength({ score: 0, text: '', color: '' });
@@ -638,30 +826,69 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         else setMatchError('');
     }, [newPassword, confirmPassword]);
 
+    const handleSave = async () => {
+        if (matchError || !newPassword || !oldPassword) return;
+
+        setIsSaving(true);
+        setSaveError(null);
+        setSaveSuccess(false);
+
+        try {
+            await onSave({ oldPassword, newPassword });
+            setSaveSuccess(true);
+            setTimeout(() => {
+                onClose();
+            }, 2000); // Close modal 2 seconds after success
+        } catch (error) {
+            setSaveError("Failed to update password. Please check your current password and try again.");
+            setIsSaving(false); // Re-enable form on error
+        }
+        // On success, isSaving remains true to keep form disabled until close
+    }
+
     return (
         <Modal isOpen={isOpen} onClose={onClose}>
             <h3 className="text-lg font-bold text-white mb-4">Change Password</h3>
-            <div className="space-y-4">
-                <input type="password" placeholder="Current Password" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-                <div>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" />
-                    {newPassword && (
-                        <div className="mt-2">
-                            <div className="h-2 w-full bg-stone-600 rounded-full">
-                                <div className={`h-2 rounded-full ${strength.color}`} style={{ width: `${strength.score * 20}%` }}></div>
+            
+            {saveSuccess && (
+                <div className="bg-green-900 border border-green-700 text-green-200 px-4 py-3 rounded-md relative mb-4" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> Your password has been updated. This window will close shortly.</span>
+                </div>
+            )}
+            
+            {saveError && (
+                 <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-md relative mb-4" role="alert">
+                    <strong className="font-bold">Error:</strong>
+                    <span className="block sm:inline"> {saveError}</span>
+                </div>
+            )}
+
+            {!saveSuccess && (
+                <div className="space-y-4">
+                    <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="Current Password" disabled={isSaving} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                    <div>
+                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" disabled={isSaving} className="w-full px-3 py-2 text-sm bg-stone-700 border border-stone-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50" />
+                        {newPassword && (
+                            <div className="mt-2">
+                                <div className="h-2 w-full bg-stone-600 rounded-full">
+                                    <div className={`h-2 rounded-full ${strength.color}`} style={{ width: `${strength.score * 20}%` }}></div>
+                                </div>
+                                <p className="text-xs mt-1 text-stone-400">{strength.text}</p>
                             </div>
-                            <p className="text-xs mt-1 text-stone-400">{strength.text}</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                    <div>
+                        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm New Password" disabled={isSaving} className={`w-full px-3 py-2 text-sm bg-stone-700 border rounded-md focus:outline-none focus:ring-2 disabled:opacity-50 ${matchError ? 'border-red-500 focus:ring-red-500' : 'border-stone-600 focus:ring-green-500'}`} />
+                        {matchError && <p className="text-xs mt-1 text-red-500">{matchError}</p>}
+                    </div>
                 </div>
-                <div>
-                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm New Password" className={`w-full px-3 py-2 text-sm bg-stone-700 border rounded-md focus:outline-none focus:ring-2 ${matchError ? 'border-red-500 focus:ring-red-500' : 'border-stone-600 focus:ring-green-500'}`} />
-                    {matchError && <p className="text-xs mt-1 text-red-500">{matchError}</p>}
-                </div>
-            </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
-                <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500">Cancel</button>
-                <button className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50" disabled={!!matchError || !newPassword}>Update Password</button>
+                <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-stone-200 bg-stone-600 rounded-md hover:bg-stone-500 disabled:opacity-50" disabled={isSaving || saveSuccess}>Cancel</button>
+                <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50" disabled={!!matchError || !newPassword || !oldPassword || isSaving || saveSuccess}>
+                    {isSaving ? 'Updating...' : 'Update Password'}
+                </button>
             </div>
         </Modal>
     );

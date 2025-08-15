@@ -30,7 +30,7 @@ export default function Login() {
     }
 
     return (
-        <div className="antialiased text-stone-700 dark:text-stone-300 bg-stone-50 dark:bg-stone-900 min-h-screen">
+        <div className="antialiased text-stone-300 bg-stone-900 min-h-screen">
             <AuthPage onAuthSuccess={handleAuthSuccess} />
         </div>
     );
@@ -55,7 +55,7 @@ const PasswordStrengthIndicator = ({ password }) => {
 
     return (
         <div className="w-full mt-2">
-            <div className="flex h-2 rounded-full overflow-hidden bg-stone-200 dark:bg-stone-700">
+            <div className="flex h-2 rounded-full overflow-hidden bg-stone-700">
                  {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="w-1/4 h-full pr-1">
                         <div className={`h-full rounded-full transition-colors duration-300 ${strength > i ? strengthColor[i] : ''}`}></div>
@@ -97,7 +97,7 @@ const InputField = ({ id, label, type, value, onChange, placeholder, error, touc
                         ? 'border-red-500 focus:ring-red-500'
                         : isValid
                         ? 'border-green-500 focus:ring-green-500'
-                        : 'border-stone-300 dark:border-stone-600 focus:ring-green-500 focus:border-green-500'
+                        : 'border-stone-600 focus:ring-green-500 focus:border-green-500'
                     }`}
                     required
                 />
@@ -105,7 +105,7 @@ const InputField = ({ id, label, type, value, onChange, placeholder, error, touc
                     <button
                         type="button"
                         onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400"
                         aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
                     >
                         {isPasswordVisible ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -227,11 +227,11 @@ const AuthPage = ({ onAuthSuccess }) => {
         <div className="flex items-center justify-center min-h-screen p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-green-600 dark:text-green-400">TaskFlow</h1>
-                    <p className="text-stone-500 dark:text-stone-400 mt-2">Stay Organized, Stay Productive</p>
+                    <h1 className="text-4xl font-bold text-green-400">TaskFlow</h1>
+                    <p className="text-stone-400 mt-2">Stay Organized, Stay Productive</p>
                 </div>
 
-                <div className="bg-white dark:bg-stone-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-stone-200 dark:border-stone-700">
+                <div className="bg-stone-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-stone-700">
                     <h2 className="text-2xl font-bold text-center mb-6">{isLogin ? 'Login to your Account' : 'Create a New Account'}</h2>
                     
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -246,21 +246,9 @@ const AuthPage = ({ onAuthSuccess }) => {
                         {!isLogin && (
                            <InputField id="confirmPassword" label="Confirm Password" type="password" value={values.confirmPassword} onChange={handleChange} placeholder="Confirm Password" error={errors.confirmPassword} touched={touched.confirmPassword}/>
                         )}
-
-                        {isLogin && (
-                            <div className="flex items-center justify-between text-sm">
-                                <div className="flex items-center">
-                                    <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 rounded border-stone-300 text-green-600 focus:ring-green-500" />
-                                    <label htmlFor="remember-me" className="ml-2 block text-stone-600 dark:text-stone-400">Remember me</label>
-                                </div>
-                                <a href="#" className="font-medium text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300">
-                                    Forgot password?
-                                </a>
-                            </div>
-                        )}
                         
                         {errors.form && (
-                            <div className="flex items-center p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/20 dark:text-red-400 rounded-md">
+                            <div className="flex items-center p-3 text-sm text-red-400 bg-red-900/20 rounded-md">
                                 <XCircle className="w-5 h-5 mr-2 flex-shrink-0" />
                                 <span>{errors.form}</span>
                             </div>
@@ -270,7 +258,7 @@ const AuthPage = ({ onAuthSuccess }) => {
                             <button
                                 type="submit"
                                 disabled={isLoading || isFormInvalid()}
-                                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-stone-900 disabled:bg-green-400 disabled:cursor-not-allowed transition-all duration-300"
+                                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-stone-900 disabled:bg-green-400 disabled:cursor-not-allowed transition-all duration-300"
                             >
                                 {isLoading ? (
                                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -283,9 +271,9 @@ const AuthPage = ({ onAuthSuccess }) => {
                         </div>
                     </form>
                 </div>
-                <p className="text-center text-sm text-stone-500 mt-6">
+                <p className="text-center text-sm text-stone-400 mt-6">
                     {isLogin ? "Don't have an account?" : "Already have an account?"}
-                    <button onClick={() => { setIsLogin(!isLogin); setTouched({}); setValues({name: '', email: '', password: '', confirmPassword: ''}); setErrors({}); }} className="font-medium text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300 ml-1">
+                    <button onClick={() => { setIsLogin(!isLogin); setTouched({}); setValues({name: '', email: '', password: '', confirmPassword: ''}); setErrors({}); }} className="font-medium text-green-400 hover:text-green-300 ml-1">
                         {isLogin ? 'Sign up' : 'Login'}
                     </button>
                 </p>

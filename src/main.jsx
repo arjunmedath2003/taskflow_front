@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 import App from './App.jsx'; // This is your main app component after login
-import Login from './Login.jsx';
+import Login from './pages/Auth/Login.jsx';
 
 // The createRoot method is used to create a root for rendering the React application.
 const root = createRoot(document.getElementById('root'));
